@@ -12,7 +12,10 @@ struct PlayerInfo
 
 struct BallInfo
 {
-    float x, y, vx, vy;
+    float x, y, vx, vy, goalY;
+
+    // Which team let a goal get scored on them (lost a point basically, used for reward shaping)
+    int teamScoredOn = -1; 
 };
 
 class PongGame : public Game
@@ -47,6 +50,7 @@ private:
     bool checkFinishedBasic();
     bool checkFinishedMultiball();
 
+    void setRewards();
 
     int numPlayers = 0;
 
@@ -74,15 +78,18 @@ private:
     int NUM_BALLS = 1;
     int MAX_ITERS = 0;
     int BOTS_PER_TEAM = 1;
-    int NUM_TEAMS = 1;
+    int NUM_TEAMS = 2;
     int MAX_POINTS = 1;
 
     int INCLUDE_FRIENDLY_POSITIONS = 0; // 1 for true, 0 for false
     int INCLUDE_OPPONENT_POSITIONS = 0; // 1 for true, 0 for false
 
+    int DIFFERENT_AI_PER_PLAYER = 0;
+
     int NUM_STATE_VARS = 0;
 
     std::vector<int> teamScores;
+    std::vector<int> teamScored; // 1 if scored on this step, 0 otherwise
 };
 
 

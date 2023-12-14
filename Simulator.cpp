@@ -10,14 +10,16 @@
 
 using std::vector;
 
-std::vector<std::vector<episodeHistory>> runSim(Game * game, float* output)
+std::vector<episodeHistory> runSim(Game * game, float* output)
 {
 
     game->reset();
-    while (!game->checkFinished())
+    do
     {
-        game->step();
-    }
+      game->step();
+
+    } while (!game->checkFinished());
+
     output[0] = game->getOutput();
 
     return game->getEpisodeHistories();
@@ -72,7 +74,7 @@ std::vector<episodeHistory> Simulator::runSimulationRL(float *output_h)
 
     auto start_time = std::chrono::high_resolution_clock::now();   
 
-    std::vector<std::vector<Experience>> threadResults = runSim(derived, output_h);
+    std::vector<episodeHistory> threadResults = runSim(derived, output_h);
 
     //std::vector<std::vector<episodeHistory>> threadResults(NUM_THREADS);
 
@@ -121,8 +123,8 @@ std::vector<episodeHistory> Simulator::runSimulationRL(float *output_h)
         topScore = 0;
     }
 
-
-    return std::move(combineThreadResults(threadResults));
+    return std::move(threadResults);
+    //return std::move(combineThreadResults(threadResults));
 }
 
 
@@ -136,8 +138,10 @@ void Simulator::batchSimulate(GameConfig config)
         loadData_(weights_h, biases_h);
         printf("Loaded in saved weights and biases.\n");
     }*/
+    derived = config.game;
     std::vector<Agent*> agents;
-    agents.push_back(new Agent(3, 6));
+    agents.push_back(new Agent(3, 5));
+    agents.push_back(agents[0]);
     derived->setAgents(agents);
 
     // Invoke the kernel
@@ -153,10 +157,9 @@ void Simulator::batchSimulate(GameConfig config)
 
     derived = config.game;
 
-    
 
     for (int i = 0; i < numSimulations; i++)
-    {                
+    {
         
             std::vector<episodeHistory> simulationIterationHistory = runSimulationRL(&output);
             
@@ -184,16 +187,20 @@ void Simulator::batchSimulate(GameConfig config)
 
             if (i < numSimulations)
             {
-                double loss = agents[0]->update(simulationIterationHistory);
-                if (i % 25 == 0) {
-                    printf("Loss = %f, Epsilon = %f, LR = %f\n", loss, agents[0]->epsilon, agents[0]->qNet.optimizer.learningRate);
+                for (int agentIdx = 0; agentIdx < agents.size(); agentIdx++)
+                {
+                    double loss = agents[agentIdx]->update(simulationIterationHistory[agentIdx]);
+                    if (i % 25 == 0 && agentIdx == 0) {
+                        printf("Agent : %d Loss = %f, Epsilon = %f, LR = %f\n", agentIdx, loss, agents[0]->epsilon, agents[0]->qNet.optimizer.learningRate);
+                    }
                 }
+                
             }
     }
    
 
-    agent.qNet.writeWeightsAndBiases(latest);
+    agents[0]->qNet.writeWeightsAndBiases(latest);
     backup.writeWeightsAndBiases(best_net);
-    printf("L2 norm between Final and Best : %f\n", agent.qNet.computeL2NormWith(backup));
+    printf("L2 norm between Final and Best : %f\n", agents[0]->qNet.computeL2NormWith(backup));
 
 }

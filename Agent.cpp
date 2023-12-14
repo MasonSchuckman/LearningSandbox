@@ -26,16 +26,16 @@ Agent::Agent(int numActions, int numInputs)
     : numActions(numActions), numInputs(numInputs), rd(), gen(rd()), qNet(0.03, 0.9, 0.999), replayBuffer(replayBufferSize)
 {
     // Add layers to the Q-network
-    qNet.addLayer(DenseLayer(numInputs, 20, LeakyRelu, LeakyReluDerivative));
+    qNet.addLayer(DenseLayer(numInputs, 12, LeakyRelu, LeakyReluDerivative));
     //// qNet.addLayer(BatchNormalizationLayer(64));
-    qNet.addLayer(DenseLayer(20, 12, LeakyRelu, LeakyReluDerivative));
+    //qNet.addLayer(DenseLayer(20, 12, LeakyRelu, LeakyReluDerivative));
     qNet.addLayer(DenseLayer(12, 8, LeakyRelu, LeakyReluDerivative));
-    qNet.addLayer(DenseLayer(8, 8, LeakyRelu, LeakyReluDerivative));
-    qNet.addLayer(DenseLayer(8, 6, LeakyRelu, LeakyReluDerivative));
+    //qNet.addLayer(DenseLayer(8, 8, LeakyRelu, LeakyReluDerivative));
+    //qNet.addLayer(DenseLayer(8, 6, LeakyRelu, LeakyReluDerivative));
 
    
 
-    qNet.addLayer(DenseLayer(6, numActions, linear, linearDerivative)); // Output layer has numActions neurons
+    qNet.addLayer(DenseLayer(8, numActions, linear, linearDerivative)); // Output layer has numActions neurons
     
     targetNet = qNet;
 
@@ -267,7 +267,7 @@ double Agent::train()
         }*/
 
         for (int i = 0; i < 2; i++)
-            loss += _train(qNet, states, targets, CURRENT_ITERATION);
+            loss += _train(qNet, states, targets, CURRENT_ITER);
 
         
 
@@ -302,8 +302,6 @@ double Agent::train()
             }
             zz++;
         }
-
-        
             
         //qNet.timestep++;
     }
@@ -314,7 +312,7 @@ double Agent::train()
 }
 
 
-void Agent::formatData(std::vector<episodeHistory>& history)
+void Agent::formatData(episodeHistory& ep)
 {
     int start = 0;
 
@@ -322,7 +320,7 @@ void Agent::formatData(std::vector<episodeHistory>& history)
     float lambda = 0.996;  // Eligibility trace decay factor
     //if(isPrintIteration())
         //printf("\nTraces:\n");
-    for (auto& ep : history)
+    //for (auto& ep : history)
     {
         // If the episode has rewards, apply eligibility traces
         if (!ep.rewards.empty())
@@ -341,18 +339,18 @@ void Agent::formatData(std::vector<episodeHistory>& history)
         }
     }
 
-
+    
     int c = 0;
-    for (auto it = history.begin(); it != history.end(); it++)
+    //for (auto it = history.begin(); it != history.end(); it++)
     {
-        for (size_t i = start; i < it->states.size() - 1; i++)
+        for (size_t i = start; i < ep.states.size() - 2; i++)
         {
             bool adding = true;// (CURRENT_ITERATION < 1500) || (static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) > 0.6;
 
             if (adding)
             {
-                bool done = i >= it->endIter - 2;
-                replayBuffer.add({ it->states[i], it->actions[i], it->rewards[i], it->states[i + 1], done, it->endIter });
+                bool done = i >= ep.endIter - 2;
+                replayBuffer.add({ ep.states[i], ep.actions[i], ep.rewards[i], ep.states[i + 1], done, ep.endIter });
                 //std::cout << "History :\n" << it->states[i] << std::endl;;
                 c++;
             }
@@ -362,18 +360,19 @@ void Agent::formatData(std::vector<episodeHistory>& history)
 
 }
 
-double Agent::update(std::vector<episodeHistory> &history)
+double Agent::update(episodeHistory &history)
 {
     //if(CURRENT_ITERATION < 2500) //turn on for overfit experiment
         formatData(history);
     double totalLoss = 0;
-    CURRENT_ITERATION++;
-
     
-    if (CURRENT_ITERATION % targetUpdateFrequency == 0)
+    CURRENT_ITER++;
+    if (CURRENT_ITER % targetUpdateFrequency == 0) {
         targetNet = qNet;
+    }
+        
 
-    for(int i = 0; i < 3; i++)
+    for(int i = 0; i < numMinibatchesPerReplay; i++)
         totalLoss += train();
     //qNet.timestep++;
 

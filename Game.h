@@ -17,7 +17,11 @@ public:
     Game() {}
     Game(const std::string& gameConfigFile) {}
     virtual ~Game() {}
-    virtual void setAgents(std::vector<Agent*> agents_) { agents = agents_; }
+    virtual void setAgents(std::vector<Agent*> agents_) {
+        for (auto a : agents_) 
+            agents.push_back(a);
+        //agents = agents_; 
+    }
     virtual void step() = 0; // Steps the environment (updates gamestate based on player actions)
     virtual bool checkFinished() = 0;
 
@@ -47,8 +51,8 @@ protected:
         return chosenAction;
     }
 
-    virtual MatrixXd getState(int player) {} // Returns a nx1 Matrix for specified player
-    virtual MatrixXd getStates() {} // Returns all players as a combined matrix, with each player being 1 column
+    virtual MatrixXd getState(int player) = 0; // Returns a nx1 Matrix for specified player
+    virtual MatrixXd getStates() = 0; // Returns all players as a combined matrix, with each player being 1 column
 
     virtual void loadConfigFile(const std::string& gameConfigFile) {}
 

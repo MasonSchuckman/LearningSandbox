@@ -13,5 +13,6 @@
     "num_teams": 2,
     "max_points": 1,
     "include_friendly_positions": 0,
-    "include_opponent_positions": 0
+    "include_opponent_positions": 0,
+    "different_ai_per_player":  1
 }

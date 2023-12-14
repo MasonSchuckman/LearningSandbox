@@ -228,9 +228,9 @@ while running:
                 state += [right_paddle_y / SCREEN_HEIGHT, right_paddle_y / SCREEN_HEIGHT]  # Paddle positions
         else:
             if i == 0:
-                state += [left_paddle_y / SCREEN_HEIGHT, 0]  # Paddle positions
+                state += [left_paddle_y / SCREEN_HEIGHT]  # Paddle positions
             else:
-                state += [right_paddle_y / SCREEN_HEIGHT, 0]  # Paddle positions
+                state += [right_paddle_y / SCREEN_HEIGHT]  # Paddle positions
             
         #state = [305.000000, 240.000000, -5.000000, 0.000000, 5.000000, 455.000000, 635.000000, 455.000000]
 

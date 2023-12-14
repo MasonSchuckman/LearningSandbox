@@ -29,7 +29,7 @@ void getNetInfo(int &numConnections, int &numNeurons, std::vector<int> layerShap
 GameConfig readSimConfig(const std::string &filename)
 {
     
-    std::ifstream file("C:\\Users\\suprm\\git\\GeneticAlgorithm\\simulations\\" + filename);
+    std::ifstream file("C:\\Users\\suprm\\git\\LearningSandbox\\" + filename);
     json configFile;
 
     // Parse the JSON file
@@ -44,15 +44,19 @@ GameConfig readSimConfig(const std::string &filename)
     }
 
     // Read the simulation type from the configFile
-    std::string simType = configFile["simulation"].get<std::string>();
+    std::string gameType = configFile["game"].get<std::string>();
+    std::cout << gameType << std::endl;
+    std::string gameConfigFile = configFile["game_config_file"].get<std::string>();
+    std::cout << gameConfigFile << std::endl;
+
     Game *sim = nullptr;
-    if (simType == "Pong")
+    if (gameType == "Pong")
     {
-        sim = new PongGame;
+        sim = new PongGame(gameConfigFile);
     }
     else
     {
-        std::cerr << "Unknown simulation type: " << simType << std::endl;
+        std::cerr << "Unknown simulation type: " << gameType << std::endl;
         exit(1);
     }
 

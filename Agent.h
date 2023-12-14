@@ -7,7 +7,8 @@
 #include <cmath>
 
 
-
+const int replayBufferSize = 1200 * 5;
+const int minibatchSize = 128 * 1;
 
 template<class ForwardIt, class T>
 constexpr // since C++20
@@ -42,6 +43,7 @@ public:
     ReplayBuffer(size_t cap) : capacity(cap) {}
 
     void add(const Experience& experience) {
+
         if (currentSize < capacity) {
             // Buffer is not yet full, just push back
             buffer.push_back(experience);
@@ -135,9 +137,9 @@ public:
     Agent(int numActions, int numInputs);
     Eigen::VectorXd chooseAction(const Eigen::MatrixXd& state);
     double train();
-    double update(std::vector<episodeHistory>& history);
+    double update(episodeHistory& history);
     void saveNeuralNet();
-    void formatData(std::vector<episodeHistory>& history);
+    void formatData(episodeHistory& history);
 public:
     ReplayBuffer replayBuffer;
     NeuralNetwork qNet; // Q-Network
@@ -152,9 +154,11 @@ public:
     float epsilonMin;
     float epsilonDecay;
 
-    int replayBufferSize = 1200 * 5;
-    int minibatchSize = 128 * 1;
+    
+    
+    int numMinibatchesPerReplay = 3;
     int targetUpdateFrequency = 600;
+    int CURRENT_ITER = 0;
 };
 
 #endif // AGENT_H

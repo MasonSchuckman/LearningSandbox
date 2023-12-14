@@ -47,6 +47,9 @@ void PongGame::resetBall(int i)
     ball->y = ballY;
     ball->vx = ballVx;
     ball->vy = ballVy;
+
+    ball->teamScoredOn = -1;
+    ball->goalY = -1;
 }
 
 
@@ -71,7 +74,7 @@ void PongGame::resetPlayers()
             PlayerInfo p;
             // Setup position
             p.x = PADDLE_WIDTH / 2 + (WIDTH - PADDLE_WIDTH) * i; // Team 0 starts on left, team 1 on right.
-            p.y = HEIGHT / 2 + (j - 0.5) * interPlayerSpacing * 2;
+            p.y = HEIGHT / 2 + j * interPlayerSpacing;// +(j - (1 / BOTS_PER_TEAM)) * interPlayerSpacing * 2;
             
             // Setup helper vars
             p.dy = 0;
@@ -81,6 +84,7 @@ void PongGame::resetPlayers()
             p.hit = false;
             p.touches = 0;
 
+            //printf("\nPlayer %d info: x : %f, y : %f, team : %d\n", i, p.x, p.y, p.team);
             players.push_back(p);
         }
     }
@@ -101,6 +105,7 @@ void PongGame::reset(int seed)
     for (int i = 0; i < NUM_TEAMS; i++)
     {
         teamScores[i] = 0;
+        teamScored[i] = 0;
     }
 
     generationNumber++;
@@ -116,9 +121,24 @@ void PongGame::reset()
     reset(0);
 }
 
+// Called when game is over
 float PongGame::getOutput()
 {
-    return 1;
+    // Set end iter
+    for (int i = 0; i < numPlayers; i++)
+    {
+        episodeHistories[i].endIter = stepNumber;
+        episodeHistories[i].actions.resize(stepNumber + 1);
+        episodeHistories[i].rewards.resize(stepNumber + 1);
+        episodeHistories[i].states.resize(stepNumber + 1);
+        
+    }
+
+    int maxTouches = players[0].touches;
+    for (const auto& p : players)
+        maxTouches = std::max(maxTouches, p.touches);
+
+    return maxTouches;
 }
 
 
@@ -127,7 +147,7 @@ void PongGame::loadConfigFile(const std::string & gameConfigFile)
     using json = nlohmann::json;
 
 
-    std::ifstream file("C:\\Users\\suprm\\git\\GeneticAlgorithm\\games\\" + gameConfigFile);
+    std::ifstream file("C:\\Users\\suprm\\git\\LearningSandbox\\" + gameConfigFile);
     json configFile;
 
     // Parse the JSON file
@@ -161,22 +181,25 @@ void PongGame::loadConfigFile(const std::string & gameConfigFile)
     INCLUDE_FRIENDLY_POSITIONS = configFile["include_friendly_positions"].get<int>();
     INCLUDE_OPPONENT_POSITIONS = configFile["include_opponent_positions"].get<int>();
 
+    DIFFERENT_AI_PER_PLAYER = configFile["different_ai_per_player"].get<int>();
+
+
     int numBallVars = 4 * NUM_BALLS;
-    int numSelfVars = 2;
+    int numSelfVars = 1;
     NUM_STATE_VARS = numBallVars + numSelfVars;
 
     if (BOTS_PER_TEAM > 1 && INCLUDE_FRIENDLY_POSITIONS == 1)
     {
-        int numFriendlyVars = 2 * (BOTS_PER_TEAM - 1);
+        int numFriendlyVars = 1 * (BOTS_PER_TEAM - 1);
         NUM_STATE_VARS += numFriendlyVars;
     }
 
     if (INCLUDE_OPPONENT_POSITIONS == 1)
     {
-        int numOpponentVars = 2 * (BOTS_PER_TEAM);
+        int numOpponentVars = 1 * (BOTS_PER_TEAM);
         NUM_STATE_VARS += numOpponentVars;
     }
-
+    printf("Num state vars = %d\n", NUM_STATE_VARS);
 
     actionEffects[0] = PADDLE_SPEED;
     actionEffects[1] = -PADDLE_SPEED;
@@ -194,9 +217,11 @@ void PongGame::loadConfigFile(const std::string & gameConfigFile)
 
 
     teamScores.resize(NUM_TEAMS);
+    teamScored.resize(NUM_TEAMS);
     for (int i = 0; i < NUM_TEAMS; i++)
     {
         teamScores[i] = 0;
+        teamScored[i] = 0;
     }
 
 }
@@ -266,6 +291,9 @@ void PongGame::resolvePlayerCollision(PlayerInfo* player, BallInfo* ball)
 
 void PongGame::step()
 {
+    teamScored[0] = 0;
+    teamScored[1] = 0;
+
     // Update each player seperately TODO: (Possibly optimize later)
     {
         MatrixXd state;
@@ -273,7 +301,7 @@ void PongGame::step()
         for (int p = 0; p < numPlayers; p++)
         {
             state = getState(p);
-            actionVec = agents[p]->chooseAction(state);
+            actionVec = agents[p * DIFFERENT_AI_PER_PLAYER]->chooseAction(state);
             int chosenAction = parseAction(actionVec);
 
             updatePlayer(p, chosenAction);
@@ -313,16 +341,32 @@ void PongGame::step()
         // Clamp ball vertical speed
         ball->vy = fmin(BALL_SPEED * 2, fmax(-BALL_SPEED * 2, ball->vy));
     }
-
-
-    stepNumber++;
+    
 }
 
 
 // Used for single ball, 2 player game
 bool PongGame::checkFinishedBasic()
 {
-    return (balls[0].x < 0 || balls[0].x > WIDTH);
+    if (balls[0].x < 0)
+    {
+        teamScored[1] = 1;
+        balls[0].goalY = balls[0].y;
+        balls[0].teamScoredOn = 0;
+        return true;
+    }
+    else if (balls[0].x > WIDTH)
+    {
+        teamScored[0] = 1;
+        balls[0].goalY = balls[0].y;
+        balls[0].teamScoredOn = 1;
+
+        return true;
+    }
+    else
+    {
+        return false;
+    }   
 }
 
 
@@ -335,17 +379,25 @@ bool PongGame::checkFinishedMultiball()
     for (int ballIdx = 0; ballIdx < NUM_BALLS; ballIdx++)
     {
         BallInfo* ball = &balls[ballIdx];
-        if (ball->x < 0 || ball->x > WIDTH)
+        bool scored = false;
+        if (ball->x < 0)
         {
-            if (ball->x < 0)
-            {
-                teamScores[1]++;
-            }
-            else
-            {
-                teamScores[0]++;
-            }
+            teamScores[1]++;
+            teamScored[1] = 1;
+            scored = true;
+
+        }
+        else if (ball->x > WIDTH)
+        {
+            teamScores[0]++;
+            teamScored[0] = 1;
+            scored = true;
+        }
             
+        if (scored)
+        {
+            ball->goalY = ball->y;
+            ball->teamScoredOn = teamScored[1] == 1 ? 0 : 1;
             // Option a:
             //resetBall(ball);
 
@@ -358,7 +410,7 @@ bool PongGame::checkFinishedMultiball()
             //Move ball a bit away from where it hit
             ball->x += ball->vx * 2;
             ball->y += ball->vy;
-        }
+        }   
     }
 
     // Check if game ended by getting a high score
@@ -374,18 +426,87 @@ bool PongGame::checkFinishedMultiball()
 
     else
         return false;
+
 }
 
+void PongGame::setRewards()
+{
+    for (int playerIdx = 0; playerIdx < numPlayers; playerIdx++)
+    {
+        PlayerInfo* player = &players[playerIdx];
+
+        // Reward for hitting the ball
+        double reward = player->hit ? 0.2 : 0;
+
+        // Reward for team scoring
+        if (teamScored[player->team] == 1)
+        {
+            reward += 1;
+        }
+
+        // Penalty if the opposite team scored
+        if (teamScored[(player->team + 1) % 2] == 1)
+        {
+            //reward -= 1;
+
+            // Find distance between the ball that got the goal and the 
+            // player on this team that was closest to the ball
+            // (Rewarding all bots on the team evenly based on who's closest).
+            // ^ Hopefully reduces "ball chasing"
+
+            float closestDistance = std::numeric_limits<float>::max();
+            for (const auto& p : players) // Loop over all players
+            {
+                if (p.team == player->team) { //Check same team
+                    for (const auto& ball : balls) // Loop over all balls
+                    {
+                        if (ball.teamScoredOn == player->team) // Check ball of interest
+                        {
+                            float distance = abs(ball.y - p.y); // Calc dist
+                            if (distance < closestDistance)
+                            {
+                                closestDistance = distance;
+                            }
+                        }
+
+                    }
+                }
+            }
+
+            closestDistance = fmin(closestDistance, 100.0f);
+            reward -= fmax(0.2, closestDistance / 100.0f);
+
+        }
+
+        /*if (reward != 0) {
+            printf("Player %d, Reward = %f, ball x = %f\n", playerIdx, reward, balls[0].x);
+        }*/
+        // Assign the calculated reward
+        episodeHistories[playerIdx].rewards[stepNumber] = reward;
+        
+    }
+}
+
+
+// Check finished also sets reward for that iteration
 bool PongGame::checkFinished()
 {
+    bool finished;
     if (MAX_POINTS == 1)
     {
-        return checkFinishedBasic();
+        finished = checkFinishedBasic();
     }
     else
     {
-        return checkFinishedMultiball();
+        finished = checkFinishedMultiball();
     }
+
+
+    setRewards();
+
+    stepNumber++;
+
+    return finished;
 }
 
 /*
