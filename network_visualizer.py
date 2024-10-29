@@ -11,6 +11,7 @@ def convert_weights(all_weights, layer_shapes):
     #print("shapes = ", layer_shapes)
     # Create a 4D list to store the converted weights
     #converted_weights = [[[[None] for _ in range(layer_shapes[i + 1])] for i in range(num_layers - 1)] for _ in range(num_bots)]
+    #print("NUM BOTS  = ", num_bots)
     converted_weights = [None] * num_bots
     for bot in range(num_bots):
         converted_weights[bot] = [None] * (num_layers - 1)
@@ -123,7 +124,7 @@ def display_activations(activations, weights, surface):
 
     num_layers = len(activations)
     layer_spacing = surface.get_width() / (num_layers + 1)
-    neuron_radius = 10
+    neuron_radius = 6
     
     positions = []
 
@@ -132,7 +133,7 @@ def display_activations(activations, weights, surface):
         neuron_spacing = surface.get_height() / (len(layer) + 1)
         neuron_radius_layer = neuron_radius
         if (len(layer) > 24):
-            neuron_radius_layer = neuron_radius // 1.5
+            neuron_radius_layer = 2
         
         for j, activation in enumerate(layer):
             x = int((i + 1) * layer_spacing)
@@ -147,7 +148,7 @@ def display_activations(activations, weights, surface):
 
             pygame.draw.circle(surface, color, (x, y), neuron_radius_layer)
 
-    draw_connections(surface, weights, normalized_activations, positions, layer_spacing, neuron_radius)
+    #draw_connections(surface, weights, normalized_activations, positions, layer_spacing, neuron_radius)
 
 
 

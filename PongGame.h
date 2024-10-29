@@ -57,13 +57,13 @@ private:
     // Gamestate variables:
     int stepNumber = 0;
     int generationNumber;
-    int winner = -1; // (-1 for game not over, 0 is left team, 1 is right team)
+    //int winner = -1; // (-1 for game not over, 0 is left team, 1 is right team)
 
     std::vector<PlayerInfo> players;
     std::vector<BallInfo> balls;
 
 
-    float actionEffects[3];
+    float actionEffects[3] = { 0,0,0 };
     
     // (Config constants)
     float WIDTH = 640.0f;
@@ -86,10 +86,12 @@ private:
 
     int DIFFERENT_AI_PER_PLAYER = 0;
 
-    int NUM_STATE_VARS = 0;
 
     std::vector<int> teamScores;
     std::vector<int> teamScored; // 1 if scored on this step, 0 otherwise
+    bool teamHit[2];
+
+
 };
 
 

@@ -5,14 +5,12 @@ import math
 import struct
 from network_visualizer import *
 
+#For self play
+data_files = ["RL-bot[0]-best.data", "RL-bot[0]-best.data","RL-bot[0]-best.data","RL-bot[0]-best.data"]
 
-# data_file = "RL-bot.data"
-# data_file = "RL-bot-best.data"
 
-data_files = ["RL-bot[0]-best-single-fast.data", "RL-bot[0]-best-single-fast.data"]
-
-#data_files = ["RL-bot[0]-best.data", "RL-bot[1]-best.data"]
-#data_files = ["RL-bot[0]-latest.data", "RL-bot[1]-latest.data"]
+#data_files = ["RL-bot[0]-best.data", "RL-bot[1]-best.data", "RL-bot[2]-best.data", "RL-bot[3]-best.data"]
+#data_files = ["RL-bot[0]-latest.data", "RL-bot[1]-latest.data", "RL-bot[2]-latest.data", "RL-bot[3]-latest.data"]
 
 
 numLayers = 0
@@ -94,46 +92,62 @@ PADDLE_SPEED = 5
 BALL_SPEED = 8
 SPEED_UP_RATE = 1.00
 # Define game colors
-BLACK = (50, 50, 0)
+BLACK = (20, 20, 0)
 WHITE = (255, 255, 255)
+GRAY = (125, 125, 125)
+
+network_display_lefts = [pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT // 2)), pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT // 2))]
+network_display_rights = [pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT // 2)), pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT // 2))]
+
+net_displays = [*network_display_lefts, *network_display_rights]
+net_locations = [(0,0), (0,SCREEN_HEIGHT // 2), (SCREEN_WIDTH + NETWORK_DISPLAY_WIDTH, 0), (SCREEN_WIDTH + NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT // 2)]
 
 # Define game state variables
 ball_x = SCREEN_WIDTH // 2
 ball_y = SCREEN_HEIGHT // 2
 ball_vx = random.choice([-BALL_SPEED, BALL_SPEED])
 ball_vy = random.uniform(-BALL_SPEED * 1.5, BALL_SPEED * 1.5)
-left_paddle_x = PADDLE_WIDTH / 2
-left_paddle_y = SCREEN_HEIGHT // 2
-right_paddle_x = PADDLE_WIDTH / 2 + SCREEN_WIDTH - PADDLE_WIDTH
-right_paddle_y = SCREEN_HEIGHT // 2
 
 
 
+left_paddles_x = [PADDLE_WIDTH / 2, PADDLE_WIDTH / 2]
+left_paddles_y = [SCREEN_HEIGHT // 2 - PADDLE_HEIGHT * 2, SCREEN_HEIGHT // 2 + PADDLE_HEIGHT * 2]
 
+right_paddles_x = [PADDLE_WIDTH / 2 + SCREEN_WIDTH - PADDLE_WIDTH, PADDLE_WIDTH / 2 + SCREEN_WIDTH - PADDLE_WIDTH]
+right_paddles_y = [SCREEN_HEIGHT // 2 - PADDLE_HEIGHT * 2, SCREEN_HEIGHT // 2 + PADDLE_HEIGHT * 2]
+
+layershapes = []
 
 best = 0
 # Load bot networks
-layershapes0, all_weights0, all_biases0 = readWeightsAndBiasesAll(data_files[0])
-layershapes1, all_weights1, all_biases1 = readWeightsAndBiasesAll(data_files[1])
-layershapes = layershapes0
-networks = [{'weights': all_weights0[best], 'biases': all_biases0[best]},
-            {'weights': all_weights1[best], 'biases': all_biases1[best]}]
+# Function to create a network dictionary
+def create_network(layershapes, all_weights, all_biases, best):
+    return {'layershapes': layershapes, 'weights': all_weights[best], 'biases': all_biases[best]}
+
+# Read weights and biases for each data file
+network_data = [readWeightsAndBiasesAll(data_file) for data_file in data_files]
+
+# Create networks using the data
+networks = [create_network(*data, best) for data in network_data]
 #print(all_weights)
 
+layershapes = networks[0]['layershapes']
 
-converted_all_weights0 = convert_weights(all_weights0, layershapes0)
-converted_all_weights1 = convert_weights(all_weights1, layershapes1)
 
-#print(converted_all_weights)
+converted_all_weights_seperate = [convert_weights([network['weights']], network['layershapes']) for network in networks]
 converted_all_weights = []
 
-converted_all_weights.append(*converted_all_weights0)
-converted_all_weights.append(*converted_all_weights1)
+for bot in range(len(converted_all_weights_seperate)):
+    converted_all_weights.append(*converted_all_weights_seperate[bot])
 
 
-print("converted all weight shapes:")
-for layer in converted_all_weights[0]:
-    print(len(layer))
+print("LAYER SHAPES:::" , layershapes)
+
+print("len networks : ", len(networks))
+
+# print("converted all weight shapes:")
+# for layer in converted_all_weights[0]:
+#     print(len(layer))
 
 def forward_propagation(inputs, weights, biases, input_size, output_size, layer):
     output = np.zeros(output_size)
@@ -210,11 +224,7 @@ def get_actions_pong(state, net_weights, net_biases):
     
     return gamestate
 
-network_display_left = pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT))
-network_display_right = pygame.Surface((NETWORK_DISPLAY_WIDTH, SCREEN_HEIGHT))
 
-net_displays = [network_display_left, network_display_right]
-net_locations = [(0,0), (SCREEN_WIDTH + NETWORK_DISPLAY_WIDTH, 0)]
 scores = [0,0]
 # Main game loop
 running = True
@@ -231,83 +241,100 @@ while running:
     
 
     # Update paddle positions using neural networks
+    
     for i in range(2):
-        state = []
+        for team in range(2):
+            state = []
 
-        if i == 0:
-            state = [abs(ball_x - left_paddle_x) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]  # Ball state
-        else:
-            state = [abs(ball_x - right_paddle_x) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, -ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]  # Ball state
-
-
-        otherInfo = False
-        if otherInfo:
-            if i == 0:
-                state += [left_paddle_y / SCREEN_HEIGHT, left_paddle_y / SCREEN_HEIGHT]  # Paddle positions
+            # Ball info
+            if team == 0:
+                state = [abs(ball_x - left_paddles_x[i]) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]  # Ball state
+                state += [abs(ball_x - left_paddles_x[i]) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]
             else:
-                state += [right_paddle_y / SCREEN_HEIGHT, right_paddle_y / SCREEN_HEIGHT]  # Paddle positions
-        else:
-            if i == 0:
-                state += [left_paddle_y / SCREEN_HEIGHT]  # Paddle positions
+                state = [abs(ball_x - right_paddles_x[i]) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, -ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]  # Ball state
+                state += [abs(ball_x - right_paddles_x[i]) / SCREEN_WIDTH, ball_y / SCREEN_HEIGHT, -ball_vx / BALL_SPEED, ball_vy / BALL_SPEED]
+
+            # Self and teammate info
+            INCLUDE_TEAMMATE_POS = True
+            if team == 0:
+                state += [left_paddles_y[i] / SCREEN_HEIGHT]
+
+                if(INCLUDE_TEAMMATE_POS):
+                    state += [left_paddles_y[(i + 1) % 2] / SCREEN_HEIGHT]  # Paddle positions
+
             else:
-                state += [right_paddle_y / SCREEN_HEIGHT]  # Paddle positions
+                state += [right_paddles_y[i] / SCREEN_HEIGHT]
+
+                if(INCLUDE_TEAMMATE_POS):
+                    state += [right_paddles_y[(i + 1) % 2] / SCREEN_HEIGHT]  # Paddle positions
+                
+
+            #print(state)
+            acceleration = get_actions_pong(state, networks[team * 2 + i]['weights'], networks[team * 2 + i]['biases'])
             
-        #state = [305.000000, 240.000000, -5.000000, 0.000000, 5.000000, 455.000000, 635.000000, 455.000000]
+            if team == 0:
+                left_paddles_y[i] += acceleration[0]
+            else:
+                right_paddles_y[i] += acceleration[0]
 
-        #print(state)
-        acceleration = get_actions_pong(state, networks[i]['weights'], networks[i]['biases'])
-        
-        if i == 0:
-            left_paddle_y += acceleration[0]
-        else:
-            right_paddle_y += acceleration[0]
+            #player = False
+            mouse_pos = pygame.mouse.get_pos()
+            #print(mouse_pos[0])
+            if abs(mouse_pos[0] - SCREEN_WIDTH // 2 - NETWORK_DISPLAY_WIDTH) < (SCREEN_WIDTH / 2 + 20):
+                
+                target = []
+                targety = mouse_pos[1]# - SCREEN_HEIGHT / 2
+                right_paddles_y[0] = targety
 
-        #player = False
-        mouse_pos = pygame.mouse.get_pos()
-        #print(mouse_pos[0])
-        if abs(mouse_pos[0] - SCREEN_WIDTH // 2 - NETWORK_DISPLAY_WIDTH) < (SCREEN_WIDTH / 2 + 20):
+            # Keep paddles within screen boundaries
+            for bot in range(len(left_paddles_y)):
+                if left_paddles_y[bot] < 0:
+                    left_paddles_y[bot] = 0
+                elif left_paddles_y[bot] > SCREEN_HEIGHT - PADDLE_HEIGHT:
+                    left_paddles_y[bot] = SCREEN_HEIGHT - PADDLE_HEIGHT
+
+            for bot in range(len(right_paddles_y)):
+                if right_paddles_y[bot] < 0:
+                    right_paddles_y[bot] = 0
+                elif right_paddles_y[bot] > SCREEN_HEIGHT - PADDLE_HEIGHT:
+                    right_paddles_y[bot] = SCREEN_HEIGHT - PADDLE_HEIGHT
             
-            target = []
-            targety = mouse_pos[1]# - SCREEN_HEIGHT / 2
-            right_paddle_y = targety
+           
 
-        # Keep paddles within screen boundaries
-        if left_paddle_y < 0:
-            left_paddle_y = 0
-        elif left_paddle_y > SCREEN_HEIGHT - PADDLE_HEIGHT:
-            left_paddle_y = SCREEN_HEIGHT - PADDLE_HEIGHT
-        if right_paddle_y < 0:
-            right_paddle_y = 0
-        elif right_paddle_y > SCREEN_HEIGHT - PADDLE_HEIGHT:
-            right_paddle_y = SCREEN_HEIGHT - PADDLE_HEIGHT
-
-        #draw neural net        
-        activations_left = calculate_activations(networks[i]['weights'], networks[i]['biases'], state, layershapes, numLayers)
-        #print(networks[i]['biases'])
-        display_activations(activations_left, converted_all_weights[i], net_displays[i])
-        #display_activations2(activations_left, converted_all_weights[i], net_displays[i], SCREEN_HEIGHT)
-        screen.blit(net_displays[i], net_locations[i])
+            #draw neural net        
+            activations_left = calculate_activations(networks[team * 2 + i]['weights'], networks[team * 2 + i]['biases'], state, layershapes, numLayers)
+            display_activations(activations_left, converted_all_weights[team * 2 + i], net_displays[team * 2 + i])
+            screen.blit(net_displays[team * 2 + i], net_locations[team * 2 + i])
     
     ball_x += ball_vx
     ball_y += ball_vy
-    speed_coef = 6 #base is 2
+    speed_coef = 2 #base is 2
+
+    #Check wall collision
     if ball_y - BALL_SIZE < 0 or ball_y + BALL_SIZE > SCREEN_HEIGHT:
         ball_vy = -ball_vy
         ball_y += ball_vy
-    if ball_x - BALL_SIZE <= left_paddle_x + PADDLE_WIDTH and ball_y + BALL_SIZE >= left_paddle_y  - PADDLE_HEIGHT / 2 and ball_y - BALL_SIZE <= left_paddle_y + PADDLE_HEIGHT and ball_vx < 0:
-        ball_vx = -ball_vx * SPEED_UP_RATE
-        #ball_vy += (ball_y - left_paddle_y - PADDLE_HEIGHT / 2) / (PADDLE_HEIGHT / 2) * BALL_SPEED
-        ball_vy = (random.random() - 0.5) * BALL_SPEED * speed_coef
-        ball_x += ball_vx * 2
-        ball_y += ball_vy
-    if ball_x + BALL_SIZE >= right_paddle_x and ball_y + BALL_SIZE >= right_paddle_y  - PADDLE_HEIGHT / 2 and ball_y - BALL_SIZE <= right_paddle_y + PADDLE_HEIGHT and ball_vx > 0:
-        ball_vx = -ball_vx * SPEED_UP_RATE
-        #ball_vy += (ball_y - right_paddle_y - PADDLE_HEIGHT / 2) / (PADDLE_HEIGHT / 2) * BALL_SPEED
-        ball_vy = (random.random() - 0.5) * BALL_SPEED * speed_coef
-        ball_x += ball_vx * 2
-        ball_y += ball_vy
+
+    # Check left team collision
+    for bot in range(2):
+        if ball_x - BALL_SIZE <= left_paddles_x[bot] + PADDLE_WIDTH and ball_y + BALL_SIZE >= left_paddles_y[bot]  - PADDLE_HEIGHT / 2 and ball_y - BALL_SIZE <= left_paddles_y[bot] + PADDLE_HEIGHT and ball_vx < 0:
+            ball_vx = -ball_vx * SPEED_UP_RATE
+            #ball_vy += (ball_y - left_paddle_y - PADDLE_HEIGHT / 2) / (PADDLE_HEIGHT / 2) * BALL_SPEED
+            ball_vy = (random.random() - 0.5) * BALL_SPEED * speed_coef
+            ball_x += ball_vx * 2
+            ball_y += ball_vy
+
+    for bot in range(2):
+        # Check right team collision
+        if ball_x + BALL_SIZE >= right_paddles_x[bot] and ball_y + BALL_SIZE >= right_paddles_y[bot]  - PADDLE_HEIGHT / 2 and ball_y - BALL_SIZE <= right_paddles_y[bot] + PADDLE_HEIGHT and ball_vx > 0:
+            ball_vx = -ball_vx * SPEED_UP_RATE
+            #ball_vy += (ball_y - right_paddle_y - PADDLE_HEIGHT / 2) / (PADDLE_HEIGHT / 2) * BALL_SPEED
+            ball_vy = (random.random() - 0.5) * BALL_SPEED * speed_coef
+            ball_x += ball_vx * 2
+            ball_y += ball_vy
     
-    
+
+    #Check score
     if ball_x < 0 or ball_x > SCREEN_WIDTH:
         if ball_x < 0:
             scores[1] += 1
@@ -317,14 +344,26 @@ while running:
         ball_y = SCREEN_HEIGHT // 2
         ball_vx = random.choice([-BALL_SPEED, BALL_SPEED])
         ball_vy = random.uniform(-BALL_SPEED, BALL_SPEED)
-        right_paddle_y = SCREEN_HEIGHT // 2
-        left_paddle_y = SCREEN_HEIGHT // 2
+
+
+        # Reset paddle positions
+        left_paddles_y = [SCREEN_HEIGHT // 2 - PADDLE_HEIGHT * 2, SCREEN_HEIGHT // 2 + PADDLE_HEIGHT * 2]
+
+        right_paddles_y = [SCREEN_HEIGHT // 2 - PADDLE_HEIGHT * 2, SCREEN_HEIGHT // 2 + PADDLE_HEIGHT * 2]
     
     ball_vy = min(BALL_SPEED * 2, max(-BALL_SPEED * 2, ball_vy))
     
     # draw game objects
-    pygame.draw.rect(screen, WHITE, (left_paddle_x + NETWORK_DISPLAY_WIDTH, left_paddle_y, PADDLE_WIDTH, PADDLE_HEIGHT))
-    pygame.draw.rect(screen, WHITE, (right_paddle_x + NETWORK_DISPLAY_WIDTH, right_paddle_y, PADDLE_WIDTH, PADDLE_HEIGHT))
+
+    #Left team paddles
+    pygame.draw.rect(screen, WHITE, (left_paddles_x[0] + NETWORK_DISPLAY_WIDTH, left_paddles_y[0], PADDLE_WIDTH, PADDLE_HEIGHT))
+    pygame.draw.rect(screen, GRAY, (left_paddles_x[1] + NETWORK_DISPLAY_WIDTH, left_paddles_y[1], PADDLE_WIDTH, PADDLE_HEIGHT))
+
+    #Right team paddles
+    pygame.draw.rect(screen, WHITE, (right_paddles_x[0] + NETWORK_DISPLAY_WIDTH, right_paddles_y[0], PADDLE_WIDTH, PADDLE_HEIGHT))
+    pygame.draw.rect(screen, GRAY, (right_paddles_x[1] + NETWORK_DISPLAY_WIDTH, right_paddles_y[1], PADDLE_WIDTH, PADDLE_HEIGHT))
+
+    #Ball
     pygame.draw.circle(screen, WHITE, (int(ball_x + NETWORK_DISPLAY_WIDTH), int(ball_y)), BALL_SIZE)
     
     # Draw the scores

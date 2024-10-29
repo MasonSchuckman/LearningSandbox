@@ -23,7 +23,6 @@ public:
     Simulator(){}
 
     // Constructor allocates all necessary device memory prior to doing simulations
-    //Simulator(vector<Specimen*> bots, Simulation* derived, SimConfig &config, Taxonomy *history);
 
     ~Simulator();
 

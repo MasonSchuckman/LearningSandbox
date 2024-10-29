@@ -5,14 +5,14 @@
     "paddle_height": 50.0,
     "ball_radius": 10.0,
     "ball_speed": 8.0,
-    "paddle_speed": 6.5,
+    "paddle_speed": 5,
     "speed_up_rate": 1.0,
-    "num_balls": 1,
-    "max_iters": 5000,
-    "bots_per_team": 1,
+    "num_balls": 2,
+    "max_iters": 3000,
+    "bots_per_team": 2,
     "num_teams": 2,
-    "max_points": 1,
-    "include_friendly_positions": 0,
+    "max_points": 3,
+    "include_friendly_positions": 1,
     "include_opponent_positions": 0,
-    "different_ai_per_player":  1
+    "different_ai_per_player":  0
 }

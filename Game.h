@@ -13,6 +13,8 @@ class Game
 {
 public:
     int numActions = 0;
+    int NUM_STATE_VARS = 0;
+    int winner = -1;
 
     Game() {}
     Game(const std::string& gameConfigFile) {}

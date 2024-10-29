@@ -5,13 +5,13 @@
 PongGame::PongGame()
 {
     numActions = 3;
-    generationNumber = -1;
-    
+    generationNumber = -1;    
 }
 
 PongGame::PongGame(const std::string & gameConfigFile)
 {
-    PongGame();
+    numActions = 3;
+    generationNumber = -1;
     loadConfigFile(gameConfigFile);
 
 
@@ -74,8 +74,24 @@ void PongGame::resetPlayers()
             PlayerInfo p;
             // Setup position
             p.x = PADDLE_WIDTH / 2 + (WIDTH - PADDLE_WIDTH) * i; // Team 0 starts on left, team 1 on right.
-            p.y = HEIGHT / 2 + j * interPlayerSpacing;// +(j - (1 / BOTS_PER_TEAM)) * interPlayerSpacing * 2;
+            if (BOTS_PER_TEAM == 1)
+                p.y = HEIGHT / 2;
+
+            else if (BOTS_PER_TEAM == 2)
+            {
+                // Have the teammates switch spawns to prevent any weird overfitting quirks
+                if(generationNumber % 2 == 0)
+                    p.y = HEIGHT / 2 + ((1.0 / BOTS_PER_TEAM) - j) * 2 * PADDLE_HEIGHT * 2;
+                else
+                    p.y = HEIGHT / 2 - ((1.0 / BOTS_PER_TEAM) - j) * 2 * PADDLE_HEIGHT * 2;
+                
+            }
             
+
+
+            p.y += (((double)rand() / RAND_MAX) - 0.5) * HEIGHT / 40; // randomize the y spawn a little bit
+
+
             // Setup helper vars
             p.dy = 0;
             p.prevY = p.y;
@@ -255,12 +271,12 @@ void PongGame::updatePlayer(int player, int chosenAction)
 bool PongGame::checkPlayerCollision(PlayerInfo* player, BallInfo* ball)
 {
     // Check if the ball's x coordinate is within the width of the paddle
-    bool withinPaddleWidth = ball->x + BALL_RADIUS / 2 >= player->x - PADDLE_WIDTH / 2 &&
-        ball->x - BALL_RADIUS / 2 <= player->x + PADDLE_WIDTH / 2;
+    bool withinPaddleWidth = ball->x + BALL_RADIUS >= player->x - PADDLE_WIDTH / 2 &&
+        ball->x - BALL_RADIUS <= player->x + PADDLE_WIDTH / 2;
 
     // Check if the ball's y coordinate is within the height of the paddle
-    bool withinPaddleHeight = ball->y + BALL_RADIUS / 2 >= player->y - PADDLE_HEIGHT / 2 &&
-        ball->y - BALL_RADIUS / 2 <= player->y + PADDLE_HEIGHT / 2;
+    bool withinPaddleHeight = ball->y + BALL_RADIUS >= player->y - PADDLE_HEIGHT / 2 &&
+        ball->y - BALL_RADIUS <= player->y + PADDLE_HEIGHT / 2;
 
     // True if:
     //      Moving right and team == 1
@@ -278,14 +294,19 @@ void PongGame::resolvePlayerCollision(PlayerInfo* player, BallInfo* ball)
     
     ball->vx = -ball->vx * SPEED_UP_RATE;                                                         // reverse the ball's horizontal direction    
     //ball->vy += (ball->y - gamestate[5] - PADDLE_HEIGHT / 2) / (PADDLE_HEIGHT / 2) * BALL_SPEED; // adjust the ball's vertical speed based on where it hit the paddle
-    ball->vy = (((double)rand() / RAND_MAX) - 0.5) * BALL_SPEED * 2;
-
+    double speedCoef = fmin(5.0f, (1.0 + 0.0004 * generationNumber + stepNumber * 0.005));
+    if (true || generationNumber % 2 == 0) //FORCE NORMAL SPEED
+        speedCoef = 2;
+    ball->vy = (((double)rand() / RAND_MAX) - 0.5) * BALL_SPEED * speedCoef;
+    
     // Update the ball position and velocity based on physics
-    ball->x += ball->vx; // ball x += ball vx
-    ball->y += ball->vy; // ball y += ball vy
+    ball->x += ball->vx;
+    ball->y += ball->vy;
 
     player->touches++;
     player->hit = true;
+
+    teamHit[player->team] = true;
 }
 
 
@@ -293,7 +314,9 @@ void PongGame::step()
 {
     teamScored[0] = 0;
     teamScored[1] = 0;
-
+    
+    teamHit[0] = false;
+    teamHit[1] = false;
     // Update each player seperately TODO: (Possibly optimize later)
     {
         MatrixXd state;
@@ -303,7 +326,6 @@ void PongGame::step()
             state = getState(p);
             actionVec = agents[p * DIFFERENT_AI_PER_PLAYER]->chooseAction(state);
             int chosenAction = parseAction(actionVec);
-
             updatePlayer(p, chosenAction);
 
             // Record data for playback
@@ -337,7 +359,6 @@ void PongGame::step()
             }
         }
 
-
         // Clamp ball vertical speed
         ball->vy = fmin(BALL_SPEED * 2, fmax(-BALL_SPEED * 2, ball->vy));
     }
@@ -353,6 +374,11 @@ bool PongGame::checkFinishedBasic()
         teamScored[1] = 1;
         balls[0].goalY = balls[0].y;
         balls[0].teamScoredOn = 0;
+        winner = 1;
+
+        if (generationNumber % 25 == 0)
+            printf("Team %d won!  ", 1);
+
         return true;
     }
     else if (balls[0].x > WIDTH)
@@ -360,6 +386,10 @@ bool PongGame::checkFinishedBasic()
         teamScored[0] = 1;
         balls[0].goalY = balls[0].y;
         balls[0].teamScoredOn = 1;
+        winner = 0;
+        
+        if (generationNumber % 25 == 0)
+            printf("Team %d won!  ", 0);
 
         return true;
     }
@@ -417,7 +447,12 @@ bool PongGame::checkFinishedMultiball()
     for (int i = 0; i < NUM_TEAMS; i++)
     {
         if (teamScores[i] >= MAX_POINTS)
-            return true;
+        {
+            winner = i;
+            if (generationNumber % 25 == 0)
+                printf("Team %d won!  ", i);
+            return true;            
+        }
     }
 
     // Check if game ended by clock running out
@@ -436,7 +471,8 @@ void PongGame::setRewards()
         PlayerInfo* player = &players[playerIdx];
 
         // Reward for hitting the ball
-        double reward = player->hit ? 0.2 : 0;
+        //double reward = player->hit ? 0.005 : 0;
+        double reward = teamHit[player->team] ? 0.005 : 0;
 
         // Reward for team scoring
         if (teamScored[player->team] == 1)
@@ -447,22 +483,27 @@ void PongGame::setRewards()
         // Penalty if the opposite team scored
         if (teamScored[(player->team + 1) % 2] == 1)
         {
+            //printf("%d Team scored, %d Missed ball!\n", (player->team + 1) % 2, (player->team) % 2);
             //reward -= 1;
 
             // Find distance between the ball that got the goal and the 
             // player on this team that was closest to the ball
             // (Rewarding all bots on the team evenly based on who's closest).
             // ^ Hopefully reduces "ball chasing"
-
+            //printf("Player distances: ");
             float closestDistance = std::numeric_limits<float>::max();
             for (const auto& p : players) // Loop over all players
             {
+                // USED FOR TESTING BALL CHASING
+                //if(p.y == player->y)
+
                 if (p.team == player->team) { //Check same team
                     for (const auto& ball : balls) // Loop over all balls
                     {
                         if (ball.teamScoredOn == player->team) // Check ball of interest
                         {
                             float distance = abs(ball.y - p.y); // Calc dist
+                            //printf("%d, ", (int)distance);
                             if (distance < closestDistance)
                             {
                                 closestDistance = distance;
@@ -472,11 +513,41 @@ void PongGame::setRewards()
                     }
                 }
             }
+            //printf("\n");
 
-            closestDistance = fmin(closestDistance, 100.0f);
-            reward -= fmax(0.2, closestDistance / 100.0f);
+            closestDistance = fmin(closestDistance, 250.0f);
+            reward -= fmax(0.5, closestDistance / 250.0f);
 
+
+            
+
+
+            //printf("Closest dist = %f, reward = %f\n", closestDistance, reward);
         }
+
+        //Penalty for being too close to teammate
+        //if (BOTS_PER_TEAM == 2)
+        //{
+        //    float distanceToTeammate = 0;
+        //    for (int p = 0; p < numActions; p++) // Loop over all players
+        //    {
+        //        if (players[p].team == player->team && p != playerIdx)
+        //        {
+        //            distanceToTeammate = abs(players[p].y - player->y);
+        //        }
+        //    }
+
+        //    float metric = PADDLE_HEIGHT * 1 - distanceToTeammate;
+
+        //    //Players are too close
+        //    if (metric > 0)
+        //    {
+        //        //if (generationNumber % 25 == 0)
+        //            //printf("Too close!\n");
+        //        reward -= metric / 3000.f;
+        //    }
+        //}
+
 
         /*if (reward != 0) {
             printf("Player %d, Reward = %f, ball x = %f\n", playerIdx, reward, balls[0].x);
@@ -502,9 +573,11 @@ bool PongGame::checkFinished()
     }
 
 
-    setRewards();
-
     stepNumber++;
+
+    finished = finished || stepNumber >= MAX_ITERS;
+
+    setRewards();
 
     return finished;
 }
@@ -529,21 +602,38 @@ MatrixXd PongGame::getState(int playerIdx)
     MatrixXd state(NUM_STATE_VARS, 1);
 
     int c = 0;
-    for (int i = 0; i < NUM_BALLS; i++)
+    
+    // "Randomize" which ball gets inserted into state first. This is to reduce bias towards one ball over another.
+    if (NUM_BALLS > 1) {
+        for (int i = 0; i < NUM_BALLS; i++)
+        {
+            state(c + 0, 0) = fabsf(balls[(i + generationNumber) % 2].x - player->x) / WIDTH;
+            state(c + 1, 0) = balls[(i + generationNumber) % 2].y / HEIGHT;
+            state(c + 2, 0) = balls[(i + generationNumber) % 2].vx / BALL_SPEED;
+
+            // Flip velocity for team 1
+            if (player->team == 1)
+                state(c + 2, 0) *= -1;
+
+            state(c + 3, 0) = balls[(i + generationNumber) % 2].vy / BALL_SPEED;
+
+            c += 4;
+        }
+    }
+    else
     {
-        state(c + 0, 0) = fabsf(balls[i].x - player->x) / WIDTH;
-        state(c + 1, 0) = balls[i].y / HEIGHT;
-        state(c + 2, 0) = balls[i].vx / BALL_SPEED;
-        
+        state(c + 0, 0) = fabsf(balls[0].x - player->x) / WIDTH;
+        state(c + 1, 0) = balls[0].y / HEIGHT;
+        state(c + 2, 0) = balls[0].vx / BALL_SPEED;
+
         // Flip velocity for team 1
         if (player->team == 1)
             state(c + 2, 0) *= -1;
 
-        state(c + 3, 0) = balls[i].vy / BALL_SPEED;
-        
+        state(c + 3, 0) = balls[0].vy / BALL_SPEED;
+
         c += 4;
     }
-
     state(c, 0) = player->y / HEIGHT;
     c++;
 
@@ -554,7 +644,8 @@ MatrixXd PongGame::getState(int playerIdx)
         {
             if (i != playerIdx && players[i].team == player->team)
             {
-                state(c, 0) = players[i].y / HEIGHT;
+                float SKEW = (((double)rand() / RAND_MAX) - 0.5) * 60; // skew the teammates' positions by +/- 30 to prevent over correlations
+                state(c, 0) = players[i].y / HEIGHT + SKEW;
                 c++;
             }
         }

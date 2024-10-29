@@ -65,14 +65,10 @@ GameConfig readSimConfig(const std::string &filename)
     int loadData = configFile["load_data"].get<int>();
 
 
-    // Create and return the SimConfig object
+    // Create and return the GameConfig object
     return { generations, sim };
 
 }
-
-// Define constant GPU memory for the config of our simulation.
-// Note: This CAN be set at runtime
-//SimConfig config_d;
 
 
 void testSim(std::string configFile, int numThreads)

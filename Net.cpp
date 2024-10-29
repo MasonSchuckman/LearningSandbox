@@ -181,53 +181,7 @@ void AdamOptimizer::update(MatrixXd& params, const MatrixXd& dParams, MatrixXd& 
      }
      return output;
  }
-//
-//MatrixXd DenseLayer::forward(const MatrixXd &inputs, bool isTraining)
-//{
-//    Layer::input = inputs;
-//
-//    // Compute the matrix product
-//    unactivated_output = (inputs * weights.transpose()).rowwise() + biases.col(0).transpose();
-//    
-//    
-//    output = unactivated_output.unaryExpr(activation); // Apply activation function
-//    std::cout << "Activations:" << std::endl
-//        << output << std::endl;
-//
-//
-//    // Print layer information
-//    if (debugging >= 3 && isPrintIteration())
-//    {
-//        std::cout << "Layer Information:" << std::endl;
-//        std::cout << "Inputs:" << std::endl
-//                  << inputs << std::endl;
-//        std::cout << "Weights:" << std::endl
-//                  << weights << std::endl;
-//        std::cout << "Biases:" << std::endl
-//                  << biases << std::endl;
-//        std::cout << "Activations:" << std::endl
-//                  << output << std::endl;
-//    }
-//    return output;
-//}
 
- //MatrixXd DenseLayer::backward(const MatrixXd& error) {
- //    // Apply derivative of activation function to the error
- //    MatrixXd output_delta = error.array() * unactivated_output.unaryExpr(activationDerivative).array();
-
- //    // Update dWeights and dBias using the outer product of output_delta and input
- //    dWeights = output_delta * input.transpose();
-
- //    // Add L2 regularization to the gradient for the weights
- //    dWeights += L2_LAMBDA * weights;
-
- //    dBias = output_delta.rowwise().sum();
-
- //    // Propagate the error backwards
- //    dInput = weights.transpose() * output_delta;
-
- //    return dInput;
- //}
 MatrixXd DenseLayer::backward(const MatrixXd& error) {
 
     MatrixXd output_delta = error.array() * unactivated_output.unaryExpr(activationDerivative).array();
@@ -405,32 +359,6 @@ MatrixXd NeuralNetwork::forward(const MatrixXd &inputs, bool isTraining)
     return currentOutput;
 }
 
-//void NeuralNetwork::backward(const MatrixXd& gradOutput) {
-//        MatrixXd currentGradient = gradOutput;
-//
-//        for (auto it = layers.rbegin(); it != layers.rend(); ++it) {            
-//            //printf("back1\n");
-//
-//           /* if (auto normalizer = dynamic_cast<BatchNormalizationLayer*>(it->get()))
-//                normalizer->learningRate = optimizer.learningRate;*/
-//
-//            currentGradient = (*it)->backward(currentGradient);
-//            //printf("back2\n");
-//            if(debugging && isPrintIteration())
-//                std::cout << "Current gradient: " << std::endl << currentGradient << std::endl;
-//
-//            // If it's a DenseLayer, update its weights and biases
-//            if (auto denseLayer = dynamic_cast<DenseLayer*>(it->get())) {
-//                // Update the weights and biases using Adam optimizer
-//                //printf("update1\n");
-//                optimizer.update(denseLayer->weights, denseLayer->dWeights, denseLayer->mWeights, denseLayer->vWeights, timestep);
-//                //printf("update2\n");
-//                optimizer.update(denseLayer->biases, denseLayer->dBias, denseLayer->mBiases, denseLayer->vBiases, timestep);
-//                //printf("update3\n");
-//            }        
-//        } 
-//        //timestep++;
-//    }
 
 void NeuralNetwork::backward(const MatrixXd& gradOutput) {
     MatrixXd currentGradient = gradOutput;
@@ -453,15 +381,14 @@ void NeuralNetwork::backward(const MatrixXd& gradOutput) {
             optimizer.update(denseLayer->weights, denseLayer->dWeights, denseLayer->mWeights, denseLayer->vWeights, timestep);
             optimizer.update(denseLayer->biases, denseLayer->dBias, denseLayer->mBiases, denseLayer->vBiases, timestep);
 
-            // Update the biases
-            //denseLayer->biases -= optimizer.learningRate * denseLayer->dBias;
+            
         }
     }
 
     timestep++;
 }
 
-    void NeuralNetwork::updateParameters() {
+    void NeuralNetwork::updateParameters() { //deprecated
         for (auto& layer : layers) {
             // Check if layer is a DenseLayer and update its parameters
             if (auto denseLayer = dynamic_cast<DenseLayer*>(layer.get())) {

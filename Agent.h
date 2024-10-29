@@ -7,8 +7,8 @@
 #include <cmath>
 
 
-const int replayBufferSize = 1200 * 5;
-const int minibatchSize = 128 * 1;
+const int replayBufferSize = 12000 * 2;
+const int minibatchSize = 256 * 1;
 
 template<class ForwardIt, class T>
 constexpr // since C++20
@@ -35,7 +35,7 @@ class ReplayBuffer {
     std::vector<double> priorities;
     double defaultPriority = 10000000; // Default high priority for new experiences
     double epsilon = 0.01; // Small constant to avoid zero priority
-
+    int sampleCount = 0;
     size_t currentSize = 0;
     size_t nextIndex = 0;
 
@@ -61,7 +61,7 @@ public:
 
 
     vector<Experience> sample(size_t batchSize, vector<int> &indices) {
-        bool uniform = false;
+        bool uniform = true;
 
         if(uniform)
             return sample(batchSize);
@@ -92,19 +92,29 @@ public:
     //uniform sampling
     vector<Experience> sample(size_t batchSize) {
         bool overfitTest = false;
+        bool deterministic = true;
         vector<Experience> batch;
 
         if (overfitTest) {
             for (int i = 0; i < batchSize; i++)
                 batch.push_back(buffer[i]);
         }
+        else if (deterministic)
+        {
+            int bufSize = buffer.size();
+            int pos = (rand() / RAND_MAX) * bufSize; // start at a random position in the buffer
+            for (int i = 0; i < batchSize; i++)
+            {
+                batch.push_back(buffer[pos % bufSize]);
+                pos += (sampleCount * 3) + 1; // jump around the buffer (prob much better way to do this, but idk)
+            }
+            sampleCount++;
+        }
         else {
             std::sample(buffer.begin(), buffer.end(), std::back_inserter(batch),
                 batchSize, std::mt19937{ std::random_device{}() });
-        }
-       
+        }       
         return batch;
-
     }
 
     void updatePriority(size_t index, double newTdError) {
@@ -137,7 +147,10 @@ public:
     Agent(int numActions, int numInputs);
     Eigen::VectorXd chooseAction(const Eigen::MatrixXd& state);
     double train();
-    double update(episodeHistory& history);
+
+    void remember(episodeHistory& history); // Used to add something to memory
+
+    double update();
     void saveNeuralNet();
     void formatData(episodeHistory& history);
 public:
@@ -154,10 +167,45 @@ public:
     float epsilonMin;
     float epsilonDecay;
 
+
+    void saveExperiences(const vector<Experience>& experiences, const std::string& filename) {
+        std::ofstream file(filename, std::ios::binary);
+        //const std::streamsize bufferSize = 1024 * 1024; // Example buffer size: 1MB
+        //char buffer[bufferSize];
+        //file.rdbuf()->pubsetbuf(buffer, bufferSize);
+
+        if (!file.is_open()) {
+            std::cerr << "Error opening file for writing: " << filename << std::endl;
+            return;
+        }
+
+        for (const auto& exp : experiences) {
+            // Assume that the dimensions of state and nextState are constant
+            int rows = exp.state.rows();
+            int cols = exp.state.cols();
+
+            // Writing state
+            file.write(reinterpret_cast<const char*>(exp.state.data()), rows * cols * sizeof(double));
+
+            // Writing other fields
+            file.write(reinterpret_cast<const char*>(&exp.action), sizeof(exp.action));
+            file.write(reinterpret_cast<const char*>(&exp.reward), sizeof(exp.reward));
+
+            // Writing nextState
+            file.write(reinterpret_cast<const char*>(exp.nextState.data()), rows * cols * sizeof(double));
+
+            file.write(reinterpret_cast<const char*>(&exp.done), sizeof(exp.done));
+            file.write(reinterpret_cast<const char*>(&exp.endIter), sizeof(exp.endIter));
+            file.write(reinterpret_cast<const char*>(&exp.tdError), sizeof(exp.tdError));
+        }
+
+        file.close();
+    }
+
+    std::vector<Experience> allExperiences;
     
-    
-    int numMinibatchesPerReplay = 3;
-    int targetUpdateFrequency = 600;
+    int numMinibatchesPerReplay = 6;
+    int targetUpdateFrequency = 800;
     int CURRENT_ITER = 0;
 };
 
